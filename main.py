@@ -32,8 +32,9 @@ def load_vgg(sess, vgg_path):
     vgg_layer4_out_tensor_name = 'layer4_out:0'
     vgg_layer7_out_tensor_name = 'layer7_out:0'
 
-    graph = tf.get_default_graph()
     tf.saved_model.loader.load(sess, [vgg_tag], vgg_path)
+
+    graph = tf.get_default_graph()
     input_image = graph.get_tensor_by_name(vgg_input_tensor_name)
     keep_prob = graph.get_tensor_by_name(vgg_keep_prob_tensor_name)
     layer3_out = graph.get_tensor_by_name(vgg_layer3_out_tensor_name)
@@ -55,40 +56,66 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
 
+    """
     INITIALIZER = tf.truncated_normal_initializer(stddev=1e-2)
     REGULARIZER = tf.contrib.layers.l2_regularizer(1e-3)
 
-    def conv2d(inputs, filters, kernel_size, stride):
+    def _conv2d(inputs, filters, kernel_size, stride, name):
         return tf.layers.conv2d(inputs=inputs,
                                 filters=filters,
                                 kernel_size=kernel_size,
                                 strides=(stride, stride),
                                 padding='same',
                                 kernel_initializer=INITIALIZER,
-                                kernel_regularizer=REGULARIZER)
+                                kernel_regularizer=REGULARIZER,
+                                name=name)
 
-    def conv2d_transpose(inputs, filters, kernel_size, stride):
+    def _conv2d_transpose(inputs, filters, kernel_size, stride, name):
         return tf.layers.conv2d(inputs=inputs,
                                 filters=filters,
                                 kernel_size=kernel_size,
                                 strides=(stride, stride),
                                 padding='same',
                                 kernel_initializer=INITIALIZER,
-                                kernel_regularizer=REGULARIZER)
+                                kernel_regularizer=REGULARIZER,
+                                name=name)
 
     # Decode Layer 7
-    output = conv2d(vgg_layer7_out, num_classes, 1, 1)
-    output = conv2d_transpose(output, num_classes, 4, 2)
+    output = _conv2d(vgg_layer7_out, num_classes, 1, 1, 'layer7')
+    output = _conv2d_transpose(output, num_classes, 4, 2, 'decoded_layer7')
 
     # Skip from Layer 4
-    pool4_out = conv2d(vgg_layer4_out, num_classes, 1, 1)
-    output = tf.add(output, pool4_out)
-    output = conv2d_transpose(output, num_classes, 4, 2)
+    pool4_out = _conv2d(vgg_layer4_out, num_classes, 1, 1, 'pool4')
+    output = tf.add(output, pool4_out, name='skipped_pool4')
+    output = _conv2d_transpose(output, num_classes, 4, 2, 'decoded_pool4')
 
     # Skip from Layer 3  
-    pool3_out = conv2d(vgg_layer3_out, num_classes, 1, 1)
+    pool3_out = _conv2d(vgg_layer3_out, num_classes, 1, 1, 'pool3')
+    output = tf.add(output, pool3_out, name='skipped_pool3')
+    output = _conv2d_transpose(output, num_classes, 16, 8, 'decoded_pool3')
+
+    return output
+    """
+
+    REGULARIZER = tf.contrib.layers.l2_regularizer(1e-3)
+
+    # The dimention of the shape 'num_classes'
+    output = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding='same', kernel_regularizer=REGULARIZER)
+
+    # The dimention of the shape 512
+    output = tf.layers.conv2d_transpose(output, vgg_layer4_out.shape[3], 4, 2, padding='same', kernel_regularizer=REGULARIZER)
+    pool4_out = vgg_layer4_out
+    pool4_out = tf.multiply(pool4_out, 1e-2)
+    output = tf.add(output, pool4_out)
+
+    # The dimension of the shape 256
+    output = tf.layers.conv2d_transpose(output, vgg_layer3_out.shape[3], 4, 2, padding='same', kernel_regularizer=REGULARIZER)
+    pool3_out = vgg_layer3_out
+    pool3_out = tf.multiply(pool3_out, 1e-4)
     output = tf.add(output, pool3_out)
-    output = conv2d_transpose(output, num_classes, 16, 8)
+
+    # Make the dimension of the shape 'num_classes'
+    output = tf.layers.conv2d_transpose(output, num_classes, 16, 8, padding='same', kernel_regularizer=REGULARIZER)
 
     return output
 
@@ -104,6 +131,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :param num_classes: Number of classes to classify
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
+
+    LEARNING_RATE = 1e-3
 
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
@@ -130,15 +159,15 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
 
-    KEEP_RATE = 0.7
+    KEEP_PROB = 0.7
 
     print("Training...")
     for i in range(epochs):
         for image, label in get_batches_fn(batch_size):
             _, loss = sess.run([train_op, cross_entropy_loss],
-                               feed_dict={input_image: image, correct_label: label, keep_prob: KEEP_RATE})
-            print("EPOCH {} ...".format(i+1))
-            print("Training Loss = {:.3f}".format(loss))
+                               feed_dict={input_image: image, correct_label: label, keep_prob: KEEP_PROB})
+        print("EPOCH {} ...".format(i+1))
+        print("Training Loss = {:.3f}".format(loss))
 
 tests.test_train_nn(train_nn)
 
@@ -163,6 +192,7 @@ def run():
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
+
         # Path to vgg model
         vgg_path = os.path.join(DATA_DIR, 'vgg')
 
@@ -177,16 +207,7 @@ def run():
         logits, training_operation, cross_entropy_loss = optimize(layer_output, correct_label, LEARNING_RATE, NUM_CLASSES)
 
         # Train NN using the train_nn function
-        train_nn(session,
-                 EPOCHS,
-                 BATCH_SIZE,
-                 get_batches_fn,
-                 training_operation,
-                 cross_entropy_loss,
-                 input_image,
-                 correct_label,
-                 keep_prob,
-                 LEARNING_RATE)
+        train_nn(session, EPOCHS, BATCH_SIZE, get_batches_fn, training_operation, cross_entropy_loss, input_image, correct_label, keep_prob, LEARNING_RATE)
 
         # Save inference data using helper.save_inference_samples
         helper.save_inference_samples(RUNS_DIR, DATA_DIR, session, IMAGE_SHAPE, logits, keep_prob, input_image)
