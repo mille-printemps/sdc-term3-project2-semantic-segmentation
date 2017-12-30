@@ -137,16 +137,22 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
 
-    KEEP_PROB = 0.7
+    KEEP_PROB = 0.8
     LEARNING_RATE = 1e-3
 
     sess.run(tf.global_variables_initializer())
     for i in range(epochs):
-        print("EPOCH {} ...".format(i+1))
+        print('EPOCH {}'.format(i+1), end='', flush=True)
+        count = 0
+        total_loss = 0
         for image, label in get_batches_fn(batch_size):
             _, loss = sess.run([train_op, cross_entropy_loss],
                                feed_dict={input_image: image, correct_label: label, keep_prob: KEEP_PROB, learning_rate: LEARNING_RATE})
-            print("Loss = {:.3f}".format(loss))
+            total_loss = total_loss + loss
+            count = count + 1
+            print('.', end='', flush=True)
+        print()
+        print('Average Loss = {:.5f}'.format(total_loss/count))
 
 tests.test_train_nn(train_nn)
 
@@ -156,7 +162,7 @@ def run():
     IMAGE_SHAPE = (160, 576)
     DATA_DIR = './data'
     RUNS_DIR = './runs'
-    EPOCHS = 50
+    EPOCHS = 90
     BATCH_SIZE = 5
 
     tests.test_for_kitti_dataset(DATA_DIR)

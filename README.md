@@ -1,4 +1,88 @@
 # Semantic Segmentation
+
+[//]: # (Image References)
+
+[image00]: ./images/loss.png "Error Loss"
+[image01]: ./images/sample01.png "Sample 01"
+[image02]: ./images/sample02.png "Sample 02"
+[image03]: ./images/sample03.png "Sample 03"
+[image04]: ./images/sample04.png "Sample 04"
+[image05]: ./images/sample05.png "Sample 05"
+[image06]: ./images/sample06.png "Sample 06"
+[image11]: ./images/sample11.png "Sample 11"
+[image12]: ./images/sample12.png "Sample 12"
+[image13]: ./images/sample13.png "Sample 13"
+[image14]: ./images/sample14.png "Sample 14"
+[image15]: ./images/sample15.png "Sample 15"
+[image16]: ./images/sample16.png "Sample 16"
+
+
+
+### Introduction
+
+This project aims at constructing a fully convolutional neural network for performing semantic segmentation to identify drivable road from a car dashcam image (trained and tested on the KITTI data set). 
+
+### Architecture
+
+The architecture of the fully convolutional neural network is based on the VGG-16 image classifier. The final fully connected layer, Layer 7, of VGG-16 image classifier is converted into a 1x1 convolution and the depth of two, road and not-road, is set. Layer 3 and 4 are also converted similarly and added to Layer 7 as skip connections after it is decoded by upsampling/transposing it. Regularization is applied to each convolutional and transposed convolutional layer.
+
+The hyperparameters used for training are
+
+* keep probability: 0.8
+* learning rate: 0.001
+* epochs: 90
+* batch size: 5
+* regularization scalar: 0.001
+
+
+### Results
+
+The following figure shows transitions of average error losses for each epoch. The blue line shows the one when the output of pooling layers, Layer 3 and Layer 4, are scaled before those layers are added to Layer 7, and the orange line shows the one when the output of those layers are not scaled before those layers are added to Layer 7.
+
+In both of the cases, the average error losses are decreasing over over time. Although the blue line is slower to decrease the average loss than the orange line, it reaches a slightly better result than the other with respect to the average error loss.
+
+![alt text][image00] <!-- .element height="450" width="650" -->
+
+#### Samples
+
+The following images show some results of inference of the trained network. The top one is from the network with scaled pooling output and the bottom one is from the network without scaled pooling output.
+
+One observation is that the network with scaled pooling output produces better results under a difficult situation, e.g. there are shadows, lanes are unclear, and the network without scaled pooling output produce clearer segmentation when other objects such as vehicles are included.
+
+---
+
+![alt text][image01] <!-- .element height="100" width="200" -->
+![alt text][image11] <!-- .element height="100" width="200" -->
+
+---
+
+![alt text][image02] <!-- .element height="100" width="200" -->
+![alt text][image12] <!-- .element height="100" width="200" -->
+
+---
+
+![alt text][image03] <!-- .element height="100" width="200" -->
+![alt text][image13] <!-- .element height="100" width="200" -->
+
+---
+
+![alt text][image04] <!-- .element height="100" width="200" -->
+![alt text][image14] <!-- .element height="100" width="200" -->
+
+---
+
+![alt text][image05] <!-- .element height="100" width="200" -->
+![alt text][image15] <!-- .element height="100" width="200" -->
+
+---
+
+![alt text][image06] <!-- .element height="100" width="200" -->
+![alt text][image16] <!-- .element height="100" width="200" -->
+
+
+---
+## *The following is the original Udacity README*
+
 ### Introduction
 In this project, you'll label the pixels of a road in images using a Fully Convolutional Network (FCN).
 
